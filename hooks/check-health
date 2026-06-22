@@ -1,0 +1,6 @@
+#!/usr/bin/bash
+if [ ! -f /etc/profile.d/headroom.sh ]; then
+    workshopctl set-health error "headroom env not configured"
+    exit 0
+fi
+workshopctl set-health okay

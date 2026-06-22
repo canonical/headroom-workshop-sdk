@@ -1,0 +1,10 @@
+#!/usr/bin/bash
+PROXY="http://localhost:8787"
+cat <<EOF >/etc/profile.d/headroom.sh
+export ANTHROPIC_BASE_URL="${PROXY}"
+export OPENAI_BASE_URL="${PROXY}/v1"
+EOF
+{
+  echo "ANTHROPIC_BASE_URL=${PROXY}"
+  echo "OPENAI_BASE_URL=${PROXY}/v1"
+} >>/etc/environment

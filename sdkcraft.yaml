@@ -1,0 +1,26 @@
+name: headroom-client
+adopt-info: version
+summary: Route a workshop's LLM traffic through the host-wide Headroom proxy
+description: |
+  This SDK wires a workshop's AI agents to a Headroom compression proxy running
+  on the host. It declares a tunnel plug to the host proxy and sets
+  ANTHROPIC_BASE_URL/OPENAI_BASE_URL so all in-workshop LLM traffic is compressed
+  before leaving the container. No compression engine is installed in the
+  workshop; the proxy, CCR cache, and cross-agent memory live on the host and are
+  shared across every workshop on the machine.
+license: MIT
+platforms:
+  ubuntu@22.04:amd64:
+  ubuntu@24.04:amd64:
+
+plugs:
+  headroom:
+    interface: tunnel
+    endpoint: localhost:8787      # workshop-side listen; forwarded to the host slot
+
+parts:
+  version:
+    plugin: nil
+    override-pull: |
+      VERSION=$(cat "$CRAFT_PROJECT_DIR/VERSION")
+      craftctl set version="$VERSION"

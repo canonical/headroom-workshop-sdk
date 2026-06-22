@@ -1,0 +1,4 @@
+name: test-headroom-client
+base: ${BASE}
+sdks:
+  - name: try-headroom-client

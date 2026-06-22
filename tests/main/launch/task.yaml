@@ -1,0 +1,21 @@
+summary: Smoke-test headroom-client SDK on ${BASE}
+
+prepare: |
+  envsubst '${BASE}' <workshop.yaml.in >workshop.yaml
+  workshop launch
+
+restore: |
+  workshop remove || true
+
+execute: |
+  # base-URL env injected for login shells
+  workshop exec -- bash -lc 'test "$ANTHROPIC_BASE_URL" = "http://localhost:8787"'
+  workshop exec -- bash -lc 'test "$OPENAI_BASE_URL" = "http://localhost:8787/v1"'
+  # profile.d snippet + /etc/environment written by setup-base
+  workshop exec -- test -f /etc/profile.d/headroom.sh
+  workshop exec -- grep -q '^ANTHROPIC_BASE_URL=http://localhost:8787$' /etc/environment
+  # SDK reaches Ready (check-health okay) — implied by a successful launch
+
+debug: |
+  workshop tasks
+  workshop exec -- bash -lc 'env | grep -E "ANTHROPIC_BASE_URL|OPENAI_BASE_URL" || true'
