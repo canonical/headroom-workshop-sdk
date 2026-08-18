@@ -1,0 +1,21 @@
+#!/usr/bin/bash
+install -d "$HOME/.config/systemd/user"
+cat >"$HOME/.config/systemd/user/headroom-proxy.service" <<EOF
+[Unit]
+Description=Headroom compression proxy (workshop-local)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Environment=HEADROOM_TELEMETRY=off
+Environment=HEADROOM_WORKSPACE_DIR=/home/workshop/.headroom
+ExecStart=${SDK}/python/bin/python3 ${SDK}/python/bin/headroom proxy --host 127.0.0.1 --port 8787
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+EOF
+
+systemctl --user daemon-reload
+systemctl --user enable --now headroom-proxy

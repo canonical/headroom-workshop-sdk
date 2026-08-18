@@ -1,7 +1,8 @@
 # ADR-0001: Release automation pipeline and branch-to-track/channel mapping
 
 Date: 2026-06-22
-Status: Accepted
+Status: Accepted (the SDK-architecture description below is superseded by
+[ADR-0002](0002-self-hosted-engine.md); the release-pipeline design remains in force)
 
 ## Context
 

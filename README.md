@@ -1,42 +1,19 @@
 # Headroom client SDK for Workshop
 
-This SDK routes a workshop's AI agent traffic through a
-[Headroom](https://github.com/headroomlabs-ai/headroom) compression proxy running on the
-host. It sets `ANTHROPIC_BASE_URL` and `OPENAI_BASE_URL` so every in-workshop LLM call
-is compressed before leaving the container.
+This SDK bakes a self-contained [Headroom](https://github.com/headroomlabs-ai/headroom)
+compression proxy into its payload and runs it **inside the workshop** on
+`127.0.0.1:8787` as a systemd user service. It sets `ANTHROPIC_BASE_URL` and
+`OPENAI_BASE_URL` so every in-workshop LLM call is compressed locally before leaving
+the container. No host-side proxy and no tunnel are required.
 
 ---
 
-## Prerequisites
+## No prerequisites
 
-The Headroom proxy must be running on the **host** before the tunnel is useful:
-
-```bash
-# Install once on the host (build-essential required for hnswlib)
-uv tool install "headroom-ai[proxy,code]"
-
-# Persistent systemd user service
-cat > ~/.config/systemd/user/headroom-proxy.service << 'EOF'
-[Unit]
-Description=Headroom compression proxy (host-wide, shared by Workshops)
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-ExecStart=%h/.local/bin/headroom proxy --host 127.0.0.1 --port 8787
-Restart=always
-RestartSec=3
-Environment=HEADROOM_TELEMETRY=off
-
-[Install]
-WantedBy=default.target
-EOF
-
-loginctl enable-linger "$USER"
-systemctl --user daemon-reload
-systemctl --user enable --now headroom-proxy
-curl -fsS http://127.0.0.1:8787/health
-```
+The engine ships in the SDK payload — a relocatable CPython interpreter with
+`headroom-ai[proxy,code]` installed into its own site-packages. Nothing needs to be
+installed or running on the host. Launch a workshop with the SDK and the proxy starts
+automatically.
 
 ---
 
@@ -51,66 +28,39 @@ sdks:
     channel: 14/edge
   - name: headroom-client
     channel: 0/edge
-  - name: system
-    slots:
-      headroom:
-        interface: tunnel
-        endpoint: localhost:8787    # host headroom proxy
-connections:
-  - plug: headroom-client:headroom
-    slot: system:headroom
-actions:
-  connect-headroom: |              # fallback if connections: is not auto-applied
-    workshop connect my-project/headroom-client:headroom my-project/system:headroom
 ```
 
 After `workshop launch`, all tools that honour `ANTHROPIC_BASE_URL`/`OPENAI_BASE_URL`
-(omp, slupgrader, codex, OpenAI SDK, Anthropic SDK) will route through the proxy
-automatically.
+(omp, slupgrader, codex, OpenAI SDK, Anthropic SDK) route through the workshop-local
+proxy automatically. The `headroom-home` mount plug auto-connects at launch — no manual
+connection step.
 
 ---
 
 ## What the SDK installs
 
-The SDK writes two environment-injection artifacts inside the workshop:
-
-| File | Content |
-|------|---------|
+| Artifact | Content |
+|----------|---------|
+| `$SDK/python/` | Relocatable CPython 3.13 + `headroom-ai[proxy,code]==0.35.0` in its site-packages |
+| `~/.config/systemd/user/headroom-proxy.service` | User service running `headroom proxy --host 127.0.0.1 --port 8787` (written by `setup-project`) |
 | `/etc/profile.d/headroom.sh` | `export ANTHROPIC_BASE_URL=http://localhost:8787` and `OPENAI_BASE_URL` — picked up by every login shell |
 | `/etc/environment` | Same two `KEY=VALUE` lines — picked up by PAM-based sessions and systemd units inside the workshop |
 
-No binary is installed. The proxy, CCR cache, and cross-agent memory live on the host
-and are shared across every workshop on the machine.
+The proxy, CCR cache, and cross-agent memory live in the workshop under
+`/home/workshop/.headroom`, persisted across `workshop refresh` via the `headroom-home`
+mount plug.
 
 ---
 
 ## Plugs (resources this SDK consumes)
 
-### `headroom`
+### `headroom-home`
 
-- Interface: `tunnel`
-- Endpoint: `localhost:8787` (workshop-side listen address)
-- Purpose: Forwards the workshop's port 8787 to the host's Headroom proxy at
-  `127.0.0.1:8787`. Must be connected to a `system` SDK slot that points at the host
-  proxy.
-
----
-
-## Connecting the tunnel
-
-Because the host-side slot uses stricter validation, the tunnel connection is not
-auto-connected at launch. Verify with `workshop info <ws>` and connect manually if
-needed:
-
-```bash
-workshop connect my-project/headroom-client:headroom my-project/system:headroom
-```
-
-Or add a `connect-headroom` action to your workshop definition and run:
-
-```bash
-workshop run my-project connect-headroom
-```
+- Interface: `mount`
+- Workshop target: `/home/workshop/.headroom`
+- Purpose: Persists Headroom's workspace (CCR cache, savings ledger, cross-agent memory,
+  logs) across workshop updates. Auto-connected to the `system` SDK's `mount` slot at
+  launch.
 
 ---
 
@@ -120,11 +70,13 @@ workshop run my-project connect-headroom
 # Inside the workshop
 workshop shell
 env | grep -E 'ANTHROPIC_BASE_URL|OPENAI_BASE_URL'
-curl -fsS http://localhost:8787/health    # proves the tunnel forwards to the host
-
-# On the host, after running an LLM task:
-curl -fsS http://127.0.0.1:8787/stats    # total_requests > 0 and tokens_saved > 0
+systemctl --user is-active headroom-proxy        # -> active
+curl -fsS http://localhost:8787/health           # local proxy serving (HTTP 200)
+curl -fsS http://localhost:8787/stats            # total_requests > 0 after an LLM task
 ```
+
+The proxy binds ~10 s after launch (uvicorn cold start); `check-health` reports the SDK
+healthy as soon as the service is `active`, and `/health` follows shortly after.
 
 ---
 
@@ -141,6 +93,7 @@ Remove the `headroom-client` SDK line from the workshop definition and run
 - [Workshop documentation](https://ubuntu.com/workshop/docs/)
 - [DEVELOPERS.md](DEVELOPERS.md) — branch model, release automation, bootstrapping a new track
 - [AGENTS.md](AGENTS.md) — quick-restart context for AI coding agents working in this repo
+- [ADR-0002](docs/adrs/0002-self-hosted-engine.md) — the shift from host-tunnel to a workshop-local engine
 
 ---
 

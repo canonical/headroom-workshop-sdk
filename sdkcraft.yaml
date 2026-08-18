@@ -1,22 +1,22 @@
 name: headroom-client
 adopt-info: version
-summary: Route a workshop's LLM traffic through the host-wide Headroom proxy
+summary: Run a self-contained Headroom compression proxy inside the workshop
 description: |
-  This SDK wires a workshop's AI agents to a Headroom compression proxy running
-  on the host. It declares a tunnel plug to the host proxy and sets
-  ANTHROPIC_BASE_URL/OPENAI_BASE_URL so all in-workshop LLM traffic is compressed
-  before leaving the container. No compression engine is installed in the
-  workshop; the proxy, CCR cache, and cross-agent memory live on the host and are
-  shared across every workshop on the machine.
+  This SDK bakes a self-contained Headroom install into its payload and runs
+  its own headroom proxy on 127.0.0.1:8787 inside the container as a systemd
+  user service. It sets ANTHROPIC_BASE_URL/OPENAI_BASE_URL so all in-workshop
+  LLM traffic is compressed locally before leaving the container. The proxy,
+  CCR cache, and cross-agent memory live in the workshop and are persisted
+  across workshop updates via a mount plug.
 license: MIT
 platforms:
   ubuntu@22.04:amd64:
   ubuntu@24.04:amd64:
 
 plugs:
-  headroom:
-    interface: tunnel
-    endpoint: localhost:8787      # workshop-side listen; forwarded to the host slot
+  headroom-home:
+    interface: mount
+    workshop-target: /home/workshop/.headroom
 
 parts:
   version:
@@ -24,3 +24,21 @@ parts:
     override-pull: |
       VERSION=$(cat "$CRAFT_PROJECT_DIR/VERSION")
       craftctl set version="$VERSION"
+  headroom:
+    plugin: nil
+    override-build: |
+      set -eux
+      # 1. Get uv into the build env (build has network).
+      export UV_INSTALL_DIR="$CRAFT_PART_BUILD/uvbin"
+      curl -LsSf https://astral.sh/uv/install.sh | sh
+      UV="$UV_INSTALL_DIR/uv"
+      # 2. Fetch a relocatable standalone CPython 3.13 (headroom needs >=3.10).
+      export UV_PYTHON_INSTALL_DIR="$CRAFT_PART_BUILD/pyinstall"
+      "$UV" python install 3.13
+      PYBIN="$("$UV" python find 3.13)"           # .../bin/python3
+      # 3. Install Headroom straight into that interpreter's site-packages (no venv).
+      "$UV" pip install --python "$PYBIN" --system --break-system-packages "headroom-ai[proxy,code]==0.35.0"
+      # 4. Copy the whole self-contained prefix (interpreter + site-packages) into the payload.
+      PYPREFIX="$(cd "$(dirname "$PYBIN")/.." && pwd)"
+      mkdir -p "$CRAFT_PART_INSTALL/python"
+      cp -a "$PYPREFIX/." "$CRAFT_PART_INSTALL/python/"
