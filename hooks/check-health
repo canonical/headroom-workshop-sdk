@@ -1,6 +1,14 @@
 #!/usr/bin/bash
-if [ ! -f /etc/profile.d/headroom.sh ]; then
-    workshopctl set-health error "headroom env not configured"
+if curl -fsS -o /dev/null http://localhost:8787/health; then
+    workshopctl set-health okay
     exit 0
 fi
-workshopctl set-health okay
+# /health serves once the proxy binds (~10s cold start), longer than the
+# check-health retry window. Treat an active service as healthy; the launch
+# smoke test's --retry curl is the load-bearing proof the proxy serves.
+if sudo -u workshop --login systemctl --user is-active --quiet headroom-proxy; then
+    workshopctl set-health okay
+    exit 0
+fi
+workshopctl set-health error "headroom proxy not running"
+exit 0

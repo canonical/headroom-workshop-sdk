@@ -32,13 +32,13 @@ Always work from a `track/*` branch:
 ```bash
 git checkout track/0
 sdkcraft try --verbose
-# add try-headroom-client to your workshop definition + system slot + connection
+# add try-headroom-client to your workshop definition (no slot/connection needed)
 workshop refresh
-workshop connect <ws>/headroom-client:headroom <ws>/system:headroom
 workshop shell
 env | grep -E 'ANTHROPIC_BASE_URL|OPENAI_BASE_URL'
-curl -fsS http://localhost:8787/health
-workshop info   # runs check-health; should show status: okay
+systemctl --user is-active headroom-proxy   # -> active
+curl -fsS http://localhost:8787/health      # local proxy serving
+workshop info   # runs check-health; should show status: ready
 ```
 
 ## Bumping the SDK version
@@ -58,7 +58,7 @@ to `0/edge`.
 ## Bootstrapping a new track
 
 When the SDK needs a major version bump (breaking change in hook behaviour,
-tunnel interface change, etc.):
+mount plug rename, engine-launch mechanism change, etc.):
 
 1. Create the new version branch from the current default:
    ```bash
