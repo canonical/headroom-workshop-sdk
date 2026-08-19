@@ -69,10 +69,17 @@ jobs:
           NAME: ${{ steps.meta.outputs.name }}
         run: sdkcraft revisions "$NAME"
 
-      - name: Release revision to ${{ inputs.track }}/edge
+      - name: Release revision(s) to ${{ inputs.track }}/edge
         if: inputs.revision != ''
         env:
           NAME: ${{ steps.meta.outputs.name }}
           TRACK: ${{ inputs.track }}
           REV: ${{ inputs.revision }}
-        run: sdkcraft release "$NAME" "$REV" "${TRACK}/edge"
+        run: |
+          IFS=',' read -ra revs <<< "$REV"
+          for r in "${revs[@]}"; do
+            r="$(echo "$r" | tr -d '[:space:]')"
+            [ -n "$r" ] || continue
+            echo "Releasing revision $r to ${TRACK}/edge..."
+            sdkcraft release "$NAME" "$r" "${TRACK}/edge"
+          done
