@@ -62,7 +62,7 @@ jobs:
           ok=""
           for t in "${cands[@]}"; do
             [ -n "$t" ] || continue
-            out="$(sdkcraft create-track "$NAME" --track "$t" 2>&1)"; rc=$?
+            if out="$(sdkcraft create-track "$NAME" --track "$t" 2>&1)"; then rc=0; else rc=$?; fi
             echo "--- create-track $t (rc=$rc) ---"
             echo "$out"
             if [ "$rc" -eq 0 ]; then
