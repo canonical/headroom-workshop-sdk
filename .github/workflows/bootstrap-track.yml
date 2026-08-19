@@ -1,0 +1,78 @@
+name: Bootstrap Store Track
+
+# One-time / on-demand store provisioning for a track.
+#
+# The upload pipeline (upload.yml) can *release* to <track>/edge only if that
+# track already exists on the SDK Store. Unlike omp-workshop-sdk — whose
+# bootstrap-major.yml runs `sdkcraft create-track` when it opens each new track
+# — this repo's tracks are bootstrapped manually, so the store-side track must
+# be created out of band. Run this workflow once per new track.
+#
+# It can also release an already-uploaded (but unreleased) revision to
+# <track>/edge, which is needed to recover an upload that landed a revision but
+# failed its release because the track did not yet exist.
+#
+# Prerequisites:
+#   SDKCRAFT_STORE_TOKEN — required; store authentication.
+
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: "Track to create (e.g. 0)"
+        required: true
+        type: string
+      revision:
+        description: "Existing revision to release to <track>/edge (optional)"
+        required: false
+        type: string
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    env:
+      SDKCRAFT_STORE_CREDENTIALS: ${{ secrets.SDKCRAFT_STORE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Derive SDK name
+        id: meta
+        run: |
+          echo "name=$(awk -F': *' '$1=="name"{print $2;exit}' sdkcraft.yaml)" >> "$GITHUB_OUTPUT"
+
+      - name: Install sdkcraft
+        run: |
+          for attempt in 1 2 3; do
+            sudo snap install sdkcraft --edge --classic && break
+            [ "$attempt" -lt 3 ] && sleep $((attempt * 5))
+          done
+
+      - name: Verify store credentials
+        run: sdkcraft whoami
+
+      - name: Ensure track exists
+        env:
+          NAME: ${{ steps.meta.outputs.name }}
+          TRACK: ${{ inputs.track }}
+        run: |
+          if sdkcraft create-track "$NAME" --track "$TRACK" 2>&1 | tee /tmp/create-track.log; then
+            echo "Track $TRACK created for $NAME."
+          elif grep -qiE 'already exist|exists' /tmp/create-track.log; then
+            echo "Track $TRACK already exists for $NAME — continuing."
+          else
+            echo "create-track failed for a reason other than pre-existence." >&2
+            exit 1
+          fi
+
+      - name: List store revisions
+        env:
+          NAME: ${{ steps.meta.outputs.name }}
+        run: sdkcraft revisions "$NAME"
+
+      - name: Release revision to ${{ inputs.track }}/edge
+        if: inputs.revision != ''
+        env:
+          NAME: ${{ steps.meta.outputs.name }}
+          TRACK: ${{ inputs.track }}
+          REV: ${{ inputs.revision }}
+        run: sdkcraft release "$NAME" "$REV" "${TRACK}/edge"
