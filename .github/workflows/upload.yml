@@ -3,7 +3,7 @@ name: Build and Upload SDK
 on:
   push:
     branches:
-      - "track/0"
+      - "track/*"
   workflow_dispatch:
     inputs:
       branch:
@@ -49,6 +49,7 @@ jobs:
           SDKCRAFT_STORE_CREDENTIALS: ${{ secrets.SDKCRAFT_STORE_TOKEN }}
         run: sdkcraft whoami
 
+
       - name: Snapshot channel state
         id: snap
         env:
@@ -68,6 +69,7 @@ jobs:
     needs: snapshot
     uses: canonical/sdkcraft-actions/.github/workflows/upload.yml@main
     with:
+      runs-on: '["ubuntu-latest"]'
       platforms: '["ubuntu@22.04:amd64","ubuntu@24.04:amd64"]'
       platform-flag: "--platform"
       risk: "edge"

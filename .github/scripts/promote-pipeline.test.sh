@@ -85,24 +85,27 @@ export MOCK_CALLS_FILE="$WORKDIR/calls.txt"
 # run_snapshot NAME TRACK [REVISIONS_FILE]
 # Writes GITHUB_OUTPUT to a temp file and prints its contents.
 run_snapshot() {
-    local name="$1" track="$2" revfile="${3:-}"
-    export MOCK_REVISIONS_FILE="$revfile"
-    local out; out=$(mktemp)
-    GITHUB_OUTPUT="$out" bash "$PIPELINE" snapshot "$name" "$track"
-    cat "$out"
+    local name="$1" track="$2" revisions_file="${3:-}"
+    export MOCK_REVISIONS_FILE="$revisions_file"
+    export GITHUB_OUTPUT="$WORKDIR/gho.txt"
+    : > "$WORKDIR/gho.txt"
+    bash "$PIPELINE" snapshot "$name" "$track"
+    cat "$WORKDIR/gho.txt"
 }
 
 # get_output_val KEY OUTPUT_CONTENT
 get_output_val() {
-    printf '%s\n' "$2" | awk -F= -v key="$1" '$1==key{print $2}'
+    local key="$1" content="$2"
+    printf '%s\n' "$content" | grep "^${key}=" | sed "s/^${key}=//"
 }
 
 # run_promote NAME TRACK EDGE BETA CANDIDATE
 # Returns recorded release calls (one per line).
 run_promote() {
-    : > "$MOCK_CALLS_FILE"
-    bash "$PIPELINE" promote "$1" "$2" "$3" "$4" "$5"
-    cat "$MOCK_CALLS_FILE"
+    local name="$1" track="$2" edge="$3" beta="$4" candidate="$5"
+    : > "$WORKDIR/calls.txt"
+    bash "$PIPELINE" promote "$name" "$track" "$edge" "$beta" "$candidate"
+    cat "$WORKDIR/calls.txt"
 }
 
 count_lines() {

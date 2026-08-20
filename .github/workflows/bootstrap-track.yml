@@ -50,29 +50,21 @@ jobs:
       - name: Verify store credentials
         run: sdkcraft whoami
 
-      - name: Probe / ensure tracks
+      - name: Ensure store track exists
         env:
           NAME: ${{ steps.meta.outputs.name }}
           TRACK: ${{ inputs.track }}
         run: |
-          # inputs.track may be a comma/space list of candidate names to try.
-          # Each attempt is non-fatal so one run reveals what the store
-          # guardrail actually accepts.
-          IFS=', ' read -ra cands <<< "$TRACK"
-          ok=""
-          for t in "${cands[@]}"; do
-            [ -n "$t" ] || continue
-            if out="$(sdkcraft create-track "$NAME" --track "$t" 2>&1)"; then rc=0; else rc=$?; fi
-            echo "--- create-track $t (rc=$rc) ---"
+          # Idempotent: create the track, tolerating "already exists" so the
+          # workflow can be re-run to (re)release revisions to an existing track.
+          if out="$(sdkcraft create-track "$NAME" --track "$TRACK" 2>&1)"; then
             echo "$out"
-            if [ "$rc" -eq 0 ]; then
-              ok="${ok:+$ok }$t"
-            elif echo "$out" | grep -qiE 'already exist|exists'; then
-              echo "(track $t already exists)"
-              ok="${ok:+$ok }$t"
-            fi
-          done
-          echo "ACCEPTED_TRACKS=$ok"
+          elif echo "$out" | grep -qiE 'already exist|exists'; then
+            echo "Track $TRACK already exists — continuing."
+          else
+            echo "$out" >&2
+            exit 1
+          fi
 
       - name: List store revisions
         env:
