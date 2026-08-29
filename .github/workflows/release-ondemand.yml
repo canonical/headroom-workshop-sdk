@@ -51,7 +51,7 @@ jobs:
       beta:      ${{ steps.snap.outputs.beta }}
       candidate: ${{ steps.snap.outputs.candidate }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Derive track and SDK name
         id: meta
@@ -97,7 +97,7 @@ jobs:
         with:
           channel: 6/stable
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install sdkcraft
         run: |
@@ -155,7 +155,7 @@ jobs:
     needs: [snapshot, build-and-upload]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install sdkcraft
         run: |
